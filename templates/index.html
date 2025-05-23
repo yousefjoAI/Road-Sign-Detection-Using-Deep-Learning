@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Road Sign Detection</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body class="bg-light">
+    <div class="container mt-5">
+        <h2 class="text-center">🚦 Road Sign Detection 🚦</h2>
+        <div class="card p-4 shadow-lg">
+            <form id="upload-form">
+                <!-- Model Selection -->
+                <label class="form-label">Select a Model:</label>
+                <select class="form-select" id="model-select">
+                    {% for model in models %}
+                        <option value="{{ model }}">{{ model }}</option>
+                    {% endfor %}
+                </select>
+
+                <!-- Model Details -->
+                <label class="form-label mt-3">Model Details:</label>
+                <div id="model-details" class="mb-3 text-muted"></div>
+
+                <!-- Image Upload -->
+                <label class="form-label">Upload an Image:</label>
+                <input type="file" class="form-control" id="image-upload" accept="image/*">
+
+                <!-- Testing Image Preview -->
+                <img id="preview" class="img-fluid mt-3 d-none mx-auto d-block" style="max-height: 300px;" />
+                <p id="preview-label" class="text-center mt-2 d-none">Testing Image</p>
+
+                <br>
+                <button type="submit" class="btn btn-primary w-100 mt-3">Predict</button>
+            </form>
+
+            <!-- Prediction Result -->
+            <div id="result" class="mt-4 text-center"></div>
+            <!-- Meta Image Preview -->
+            <img id="meta" class="img-fluid mt-3 d-none mx-auto" style="max-height: 300px;" />
+            <p id="meta-label" class="text-center d-none">Predicted Image</p>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+    $(document).ready(function () {
+        // Injected from Flask backend (correct JSON format)
+        const modelDetails = {{ model_details | tojson | safe }};
+
+        // Show model details on selection
+        $("#model-select").on("change", function () {
+            const selected = $(this).val();
+            const detail = modelDetails[selected] || "No details available.";
+            $("#model-details").html(`<pre>${detail}</pre>`);
+        });
+
+        // Trigger change on load
+        $("#model-select").trigger("change");
+
+        // Show image preview and label
+        $("#image-upload").on("change", function () {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    $("#preview").attr("src", e.target.result).removeClass("d-none");
+                    $("#preview-label").removeClass("d-none");
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+
+
+        // Handle form submission
+        $("#upload-form").on("submit", function (e) {
+            e.preventDefault();
+
+            let formData = new FormData();
+            let fileInput = $("#image-upload")[0].files[0];
+            let selectedModel = $("#model-select").val();
+
+            if (!fileInput) {
+                alert("Please select an image!");
+                return;
+            }
+
+            formData.append("file", fileInput);
+            formData.append("model", selectedModel);
+
+            $("#result").html("<p class='text-info'>Processing...</p>");
+
+            $.ajax({
+                url: "/predict",
+                type: "POST",
+                data: formData,
+                contentType: false,
+                processData: false,
+                success: function (response) {
+                    if (response.error) {
+                        $("#result").html(`<p class='text-danger'>${response.error}</p>`);
+                        $("#meta").addClass("d-none");
+                        $("#meta-label").addClass("d-none");
+                    } else {
+                        $("#result").html(`
+                        <p class='text-success'><strong>Predicted Sign:</strong> ${response.class}</p>
+                        <p class='text-success'><strong>Confidence:</strong> ${response.confidence}</p>
+                        `);
+
+                        // Show meta image (from /static/images/)
+                        $("#meta").attr("src", "/static/" + response.meta_image).removeClass("d-none");
+                        $("#meta-label").removeClass("d-none");
+                    }
+                },
+                error: function () {
+                    $("#result").html("<p class='text-danger'>An error occurred.</p>");
+                }
+            });
+        });
+    });
+</script>
+
+</body>
+</html>
